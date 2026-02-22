@@ -1,80 +1,113 @@
-# Meetup MCP Demo
+# 📋 Meetup MCP Demo
 
-Servidor MCP (Model Context Protocol) que conecta ao Cursor (ou outro cliente MCP) e permite buscar as respostas de um formulário do meetup a partir de uma **planilha pública do Google Sheets** vinculada ao Google Forms.
+![Status](https://img.shields.io/badge/status-Concluído-green)
+![Runtime](https://img.shields.io/badge/runtime-Node.js_18+-green)
+![Protocol](https://img.shields.io/badge/protocol-MCP_(Model_Context_Protocol)-blue)
+![Integração](https://img.shields.io/badge/integração-Google_Sheets_/_Forms-yellow)
 
-## O que este projeto faz
+---
 
-- Expõe a ferramenta **`get_meetup_responses`** para o assistente do Cursor.
-- Ao ser chamada, o servidor lê a planilha do Google Sheets em modo público (export CSV) e devolve as respostas em JSON.
-- Não é necessário autenticação: a planilha precisa apenas estar com **“Qualquer pessoa com o link pode ver”**.
+## 📖 Descrição do Projeto
 
-## Requisitos
+**Meetup MCP Demo** é um servidor **MCP (Model Context Protocol)** que se conecta ao Cursor (ou outro cliente MCP) e permite buscar as respostas de um formulário de meetup a partir de uma **planilha pública do Google Sheets** vinculada ao Google Forms. O servidor expõe a ferramenta `get_meetup_responses`, que lê a planilha via exportação CSV (sem necessidade de autenticação) e retorna os dados em JSON para o assistente de IA.
 
-- **Node.js** 18 ou superior ([nodejs.org](https://nodejs.org))
-- **Cursor** (ou outro cliente que suporte MCP)
+---
 
-## Instalação
+## 🗂 Estrutura do Repositório
 
-O repositório **não inclui** a pasta `node_modules` (está no `.gitignore`). É preciso instalar as dependências depois de clonar:
-
-```bash
-# Entrar na pasta do projeto
-cd Meetup-mcp-demo
-
-# Instalar dependências
-npm install
+```text
+Meetup-mcp-demo/
+│
+├── mcp-server.js       # Servidor MCP e ferramenta get_meetup_responses
+├── package.json        # Dependências e script "start"
+├── package-lock.json   # Lock das dependências
+├── .gitignore          # node_modules e .env ignorados
+└── README.md           # Este arquivo
 ```
 
-Isso instala:
+| ID     | Funcionalidade              | Descrição                                                                 |
+|--------|-----------------------------|----------------------------------------------------------------------------|
+| RF01   | Ferramenta MCP              | Expõe `get_meetup_responses` para o assistente do Cursor usar no chat.    |
+| RF02   | Leitura da planilha         | Busca dados da planilha do Google Sheets via URL de exportação CSV.        |
+| RF03   | Sem autenticação            | Funciona com planilhas públicas ("Qualquer pessoa com o link pode ver").  |
+| RF04   | Parâmetros opcionais        | Permite informar `spreadsheet_id` e `gid` para outra planilha/aba.         |
 
-- `@modelcontextprotocol/sdk` – servidor MCP
-- `node-fetch` – requisições HTTP para o Google Sheets
-- `csv-parse` – leitura do CSV exportado pela planilha
+---
 
-## Configurar o servidor MCP no Cursor
+## 🛠 Tecnologias Utilizadas
 
-1. Abra **Cursor Settings** → **MCP** (ou o arquivo de configuração dos servidores MCP).
-2. Inclua o servidor **meetup-forms** na configuração. Exemplo de `mcp.json`:
+- **Runtime:** Node.js 18+
+- **Protocolo:** Model Context Protocol (SDK `@modelcontextprotocol/sdk`)
+- **HTTP:** node-fetch
+- **CSV:** csv-parse (leitura do export do Google Sheets)
+- **Validação:** Zod (schemas da ferramenta)
+- **Cliente:** Cursor (ou outro cliente MCP)
+
+---
+
+## ⚙️ Configuração do servidor MCP no Cursor
+
+O servidor é iniciado pelo Cursor via configuração MCP. Adicione o bloco abaixo no arquivo de configuração dos servidores MCP (ex.: **Cursor Settings → MCP** ou `~/.cursor/mcp.json`):
 
 ```json
 {
   "mcpServers": {
     "meetup-forms": {
       "command": "node",
-      "args": ["C:\\Users\\User\\Desktop\\Geral\\GITHUB\\Meetup-mcp-demo\\mcp-server.js"]
+      "args": ["C:\\caminho\\completo\\ate\\Meetup-mcp-demo\\mcp-server.js"]
     }
   }
 }
 ```
 
-**Importante:** use o **caminho completo** até o `mcp-server.js` no seu PC (no Windows, use `\\` nas barras). Ajuste conforme o local em que você clonou o projeto.
+> **Importante:** Use o **caminho completo** até o `mcp-server.js` no seu computador. No Windows, use `\\` nas barras. Ajuste conforme o local em que você clonou o projeto.
+>
+> O Cursor inicia e encerra o processo automaticamente; não é necessário rodar `node mcp-server.js` manualmente no terminal para uso normal.
 
-3. Salve e deixe o servidor **ativado** (toggle verde em “Installed MCP Servers”).
+---
 
-O Cursor vai iniciar o processo `node mcp-server.js` quando precisar da ferramenta; você **não** precisa rodar o servidor manualmente no terminal para uso normal.
+## ⚠️ Pré-requisitos
 
-## Planilha do Google Sheets
+- **Node.js** 18 ou superior ([nodejs.org](https://nodejs.org))
+- **Cursor** (ou outro cliente que suporte MCP)
+- Planilha do Google Sheets vinculada ao Forms com compartilhamento **"Qualquer pessoa com o link pode ver"** (ou publicada na web)
 
-- A planilha usada por padrão está definida no código (constante `SPREADSHEET_ID` em `mcp-server.js`).
-- Ela precisa estar com compartilhamento **“Qualquer pessoa com o link pode ver”** (ou “Publicado na Web”, dependendo do caso), senão a exportação em CSV falha.
-- Para usar **outra planilha** sem alterar o código, a ferramenta aceita o parâmetro opcional `spreadsheet_id` na chamada.
+---
 
-## Como usar
+## 🚀 Instalação de Dependências
 
-1. Com o MCP configurado e o servidor **meetup-forms** ligado no Cursor.
-2. No chat do Cursor, peça algo como:
-   - *“Busque as respostas do meetup”*
-   - *“Chama a ferramenta get_meetup_responses”*
-3. O assistente usará a ferramenta **get_meetup_responses** e mostrará o resumo e os dados (JSON) das respostas da planilha.
+O repositório **não inclui** a pasta `node_modules` (está no `.gitignore`). Na raiz do projeto, execute:
+
+```bash
+npm install
+```
+
+Isso instala: `@modelcontextprotocol/sdk`, `node-fetch`, `csv-parse` e `zod`.
+
+---
+
+## 💻 Como Rodar o Projeto
+
+### Uso no Cursor (recomendado)
+
+1. Configure o servidor MCP no Cursor (veja a seção **Configuração do servidor MCP** acima).
+2. Ative o servidor **meetup-forms** (toggle verde em "Installed MCP Servers").
+3. No chat, peça por exemplo:
+   - *"Busque as respostas do meetup"*
+   - *"Use a ferramenta get_meetup_responses"*
+
+O assistente chamará a ferramenta e exibirá o resumo e os dados (JSON) das respostas.
 
 ### Parâmetros opcionais da ferramenta
 
-- **`spreadsheet_id`** (string): ID de outra planilha. Se não for passado, usa o ID configurado no servidor.
-- **`gid`** (número): ID da aba (gid). Use `0` para a primeira aba. Opcional.
+| Parâmetro         | Tipo   | Descrição                                                                 |
+|-------------------|--------|----------------------------------------------------------------------------|
+| `spreadsheet_id`  | string | ID de outra planilha. Se omitido, usa a planilha configurada no servidor. |
+| `gid`             | number | ID da aba da planilha. Padrão: aba "Respostas ao formulário 1".            |
 
-## Rodar o servidor manualmente (opcional)
+### Rodar o servidor manualmente (opcional)
 
-Só para testar se o processo sobe sem erro:
+Para apenas testar se o processo inicia sem erros:
 
 ```bash
 npm start
@@ -86,17 +119,19 @@ ou:
 node mcp-server.js
 ```
 
-O processo fica “parado” esperando mensagens na entrada padrão — isso é o esperado. Para encerrar: **Ctrl+C**. No uso com o Cursor, o Cursor é quem inicia e encerra o servidor.
+O processo ficará aguardando mensagens na entrada padrão (comportamento esperado). Para encerrar: **Ctrl+C**.
 
-## Estrutura do projeto
+**Dica:** Após alterar o código do `mcp-server.js`, reinicie o servidor MCP no Cursor (desligue e ligue o toggle do meetup-forms) para carregar as mudanças.
 
-```
-Meetup-mcp-demo/
-├── mcp-server.js    # Servidor MCP e ferramenta get_meetup_responses
-├── package.json     # Dependências e script "start"
-├── .gitignore       # node_modules e .env ignorados
-└── README.md        # Este arquivo
-```
+---
+
+## 📄 Planilha do Google Sheets
+
+- A planilha e a aba padrão estão definidas no código (`SPREADSHEET_ID` e `DEFAULT_SHEET_GID` em `mcp-server.js`).
+- A planilha precisa estar compartilhada como **"Qualquer pessoa com o link pode ver"** para a exportação CSV funcionar.
+- Para usar outra planilha sem alterar o código, passe o parâmetro `spreadsheet_id` (e, se necessário, `gid`) na chamada da ferramenta.
+
+---
 
 ## Licença
 
