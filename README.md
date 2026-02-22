@@ -9,7 +9,7 @@
 
 ## 📖 Descrição do Projeto
 
-**Meetup MCP Demo** é um servidor **MCP (Model Context Protocol)** que se conecta ao Cursor (ou outro cliente MCP) e permite buscar as respostas de um formulário de meetup a partir de uma **planilha pública do Google Sheets** vinculada ao Google Forms. O servidor expõe a ferramenta `get_meetup_responses`, que lê a planilha via exportação CSV (sem necessidade de autenticação) e retorna os dados em JSON para o assistente de IA.
+**Meetup MCP Demo** é um servidor **MCP (Model Context Protocol)** que se conecta ao Cursor (ou outro cliente MCP) e permite buscar as respostas de um formulário de meetup a partir de uma **planilha pública do Google Sheets** vinculada ao Google Forms. O servidor expõe duas ferramentas: `get_meetup_responses` (lê a planilha via CSV e retorna os dados em JSON) e `send_meetup_email` (envia um e-mail com a mensagem informada para todos os endereços de e-mail encontrados na planilha). A leitura da planilha não exige autenticação; o envio de e-mails usa SMTP configurado via `.env`.
 
 ---
 
@@ -18,7 +18,9 @@
 ```text
 Meetup-mcp-demo/
 │
-├── mcp-server.js       # Servidor MCP e ferramenta get_meetup_responses
+├── mcp-server.js       # Servidor MCP (get_meetup_responses, send_meetup_email)
+├── email.js            # Envio de e-mail via SMTP (nodemailer)
+├── .env.example        # Exemplo de variáveis para .env (copiar para .env)
 ├── package.json        # Dependências e script "start"
 ├── package-lock.json   # Lock das dependências
 ├── .gitignore          # node_modules e .env ignorados
@@ -31,6 +33,7 @@ Meetup-mcp-demo/
 | RF02   | Leitura da planilha         | Busca dados da planilha do Google Sheets via URL de exportação CSV.        |
 | RF03   | Sem autenticação            | Funciona com planilhas públicas ("Qualquer pessoa com o link pode ver").  |
 | RF04   | Parâmetros opcionais        | Permite informar `spreadsheet_id` e `gid` para outra planilha/aba.         |
+| RF05   | Envio de e-mail             | `send_meetup_email`: envia o texto (campo `message`) para todos os e-mails da planilha; requer `.env` com SMTP. |
 
 ---
 
@@ -40,6 +43,8 @@ Meetup-mcp-demo/
 - **Protocolo:** Model Context Protocol (SDK `@modelcontextprotocol/sdk`)
 - **HTTP:** node-fetch
 - **CSV:** csv-parse (leitura do export do Google Sheets)
+- **E-mail:** nodemailer (SMTP)
+- **Ambiente:** dotenv (variáveis EMAIL_USER, EMAIL_PASS, SMTP_*)
 - **Validação:** Zod (schemas da ferramenta)
 - **Cliente:** Cursor (ou outro cliente MCP)
 
@@ -66,6 +71,22 @@ O servidor é iniciado pelo Cursor via configuração MCP. Adicione o bloco abai
 
 ---
 
+## 📧 Configuração de e-mail (send_meetup_email)
+
+Para usar a ferramenta **send_meetup_email**, configure as variáveis de ambiente:
+
+1. Copie o arquivo `.env.example` para `.env` na raiz do projeto.
+2. Preencha no `.env`:
+   - **EMAIL_USER:** endereço de e-mail que envia (ex.: seu_email@gmail.com)
+   - **EMAIL_PASS:** senha ou, no Gmail com 2FA, use uma **Senha de app** (Google Account)
+   - **SMTP_HOST**, **SMTP_PORT**, **SMTP_SECURE:** opcionais (padrão: Gmail, 587, false)
+
+A planilha deve ter uma coluna de e-mail (ex.: **"Endereço de e-mail"**). Os endereços são lidos dessa coluna, validados e enviados em massa (sem duplicatas).
+
+> **Segurança:** O arquivo `.env` está no `.gitignore` e não deve ser commitado. Nunca exponha credenciais no repositório.
+
+---
+
 ## ⚠️ Pré-requisitos
 
 - **Node.js** 18 ou superior ([nodejs.org](https://nodejs.org))
@@ -82,7 +103,7 @@ O repositório **não inclui** a pasta `node_modules` (está no `.gitignore`). N
 npm install
 ```
 
-Isso instala: `@modelcontextprotocol/sdk`, `node-fetch`, `csv-parse` e `zod`.
+Isso instala: `@modelcontextprotocol/sdk`, `node-fetch`, `csv-parse`, `zod`, `nodemailer` e `dotenv`.
 
 ---
 
@@ -93,10 +114,10 @@ Isso instala: `@modelcontextprotocol/sdk`, `node-fetch`, `csv-parse` e `zod`.
 1. Configure o servidor MCP no Cursor (veja a seção **Configuração do servidor MCP** acima).
 2. Ative o servidor **meetup-forms** (toggle verde em "Installed MCP Servers").
 3. No chat, peça por exemplo:
-   - *"Busque as respostas do meetup"*
-   - *"Use a ferramenta get_meetup_responses"*
+   - *"Busque as respostas do meetup"* ou *"Use a ferramenta get_meetup_responses"*
+   - *"Envie um e-mail para todos os inscritos do meetup com a mensagem: [texto]"* ou *"Use send_meetup_email com a mensagem: [texto]"*
 
-O assistente chamará a ferramenta e exibirá o resumo e os dados (JSON) das respostas.
+O assistente chamará a ferramenta e exibirá o resumo (dados em JSON para `get_meetup_responses`; quantidade de e-mails enviados/falhas para `send_meetup_email`). Para enviar e-mails, o `.env` deve estar configurado (veja a seção **Configuração de e-mail**).
 
 ### Parâmetros opcionais da ferramenta
 

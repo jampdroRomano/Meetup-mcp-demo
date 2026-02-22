@@ -1,8 +1,16 @@
+import path from "path";
+import { fileURLToPath } from "url";
+import dotenv from "dotenv";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.resolve(__dirname, ".env") });
+
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import fetch from "node-fetch";
 import { parse } from "csv-parse/sync";
 import { z } from "zod";
+import { sendEmail } from "./email.js";
 
 // ID da planilha de respostas do Google Sheets (vinculada ao Forms do Meetup)
 // URL: https://docs.google.com/spreadsheets/d/1P3LoDlfpV4G4SCzNAaTjMMn82pXwFz9zY7dQCgi6-eo/edit
@@ -52,6 +60,30 @@ function parseCsvToRows(csvText) {
     cast: false,
   });
   return Array.isArray(rows) ? rows : [];
+}
+
+const EMAIL_HEADER_REGEX = /e-mail|email|endereço de e-mail/i;
+const BASIC_EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+async function getEmailsFromSheet() {
+  const csvText = await fetchSheetAsCsv(SPREADSHEET_ID, DEFAULT_SHEET_GID);
+  const rows = parseCsvToRows(csvText);
+  if (rows.length < 2) return [];
+
+  const [rawHeaders, ...dataRows] = rows;
+  const headers = (rawHeaders || []).map((h, i) =>
+    h != null && String(h).trim() !== "" ? String(h).trim() : `Coluna_${i + 1}`
+  );
+  const emailColIndex = headers.findIndex((h) => EMAIL_HEADER_REGEX.test(String(h).trim().toLowerCase()));
+  if (emailColIndex === -1) return [];
+
+  const emails = new Set();
+  for (const row of dataRows) {
+    if (!Array.isArray(row)) continue;
+    const value = row[emailColIndex] != null ? String(row[emailColIndex]).trim() : "";
+    if (value && BASIC_EMAIL_REGEX.test(value)) emails.add(value);
+  }
+  return [...emails];
 }
 
 const server = new McpServer({
@@ -133,6 +165,77 @@ server.registerTool(
             text: `Erro: ${message}`,
           },
         ],
+        isError: true,
+      };
+    }
+  }
+);
+
+server.registerTool(
+  "send_meetup_email",
+  {
+    description:
+      "Envia um e-mail com a mensagem informada para todos os endereços de e-mail encontrados na planilha de respostas do meetup. Requer .env configurado (EMAIL_USER, EMAIL_PASS).",
+    inputSchema: {
+      message: z.string().describe("Texto do e-mail a ser enviado a todos os inscritos da planilha."),
+    },
+  },
+  async (args) => {
+    const message = args?.message ?? "";
+    if (!message.trim()) {
+      return {
+        content: [{ type: "text", text: "O campo message não pode estar vazio." }],
+        isError: true,
+      };
+    }
+
+    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+      return {
+        content: [
+          {
+            type: "text",
+            text:
+              "Configure o .env: copie .env.example para .env e preencha EMAIL_USER e EMAIL_PASS (e opcionalmente SMTP_HOST, SMTP_PORT).",
+          },
+        ],
+        isError: true,
+      };
+    }
+
+    try {
+      const emails = await getEmailsFromSheet();
+      if (emails.length === 0) {
+        return {
+          content: [
+            {
+              type: "text",
+              text:
+                "Nenhum e-mail encontrado na planilha. Verifique se existe uma coluna de e-mail (ex.: \"Endereço de e-mail\").",
+            },
+          ],
+        };
+      }
+
+      const sent = [];
+      const failed = [];
+      for (const email of emails) {
+        try {
+          await sendEmail(email, message);
+          sent.push(email);
+        } catch (err) {
+          failed.push({ email, error: (err && err.message) || String(err) });
+        }
+      }
+
+      let text = `E-mails enviados: ${sent.length}. Falhas: ${failed.length}.`;
+      if (failed.length > 0) {
+        text += ` Endereços que falharam: ${failed.map((f) => f.email).join(", ")}.`;
+      }
+      return { content: [{ type: "text", text }] };
+    } catch (err) {
+      const msg = (err && err.message) || String(err);
+      return {
+        content: [{ type: "text", text: `Erro ao enviar e-mails: ${msg}` }],
         isError: true,
       };
     }
