@@ -9,7 +9,7 @@
 
 ## 📖 Descrição do Projeto
 
-**Meetup MCP Demo** é um servidor **MCP (Model Context Protocol)** que se conecta ao Cursor (ou outro cliente MCP) e permite buscar as respostas de um formulário de meetup a partir de uma **planilha pública do Google Sheets** vinculada ao Google Forms. O servidor expõe duas ferramentas: `get_meetup_responses` (lê a planilha via CSV e retorna os dados em JSON) e `send_meetup_email` (envia um e-mail com a mensagem informada para todos os endereços de e-mail encontrados na planilha). A leitura da planilha não exige autenticação; o envio de e-mails usa SMTP configurado via `.env`.
+**Meetup MCP Demo** é um servidor **MCP (Model Context Protocol)** que se conecta ao Cursor (ou outro cliente MCP) e permite buscar as respostas de um formulário de meetup a partir de uma **planilha pública do Google Sheets** vinculada ao Google Forms. O servidor expõe três ferramentas: `get_meetup_responses` (lê a planilha via CSV e retorna os dados em JSON), `send_meetup_email` (envia um e-mail com a mensagem informada para todos os endereços de e-mail encontrados na planilha) e `get_clicks` (retorna os cliques em links de rastreio enviados por e-mail). A leitura da planilha não exige autenticação; o envio de e-mails usa SMTP configurado via `.env`.
 
 ---
 
@@ -18,7 +18,7 @@
 ```text
 Meetup-mcp-demo/
 │
-├── mcp-server.js       # Servidor MCP (get_meetup_responses, send_meetup_email)
+├── mcp-server.js       # Servidor MCP (get_meetup_responses, send_meetup_email, get_clicks) + HTTP de rastreio
 ├── email.js            # Envio de e-mail via SMTP (nodemailer)
 ├── .env.example        # Exemplo de variáveis para .env (copiar para .env)
 ├── package.json        # Dependências e script "start"
@@ -34,6 +34,7 @@ Meetup-mcp-demo/
 | RF03   | Sem autenticação            | Funciona com planilhas públicas ("Qualquer pessoa com o link pode ver").  |
 | RF04   | Parâmetros opcionais        | Permite informar `spreadsheet_id` e `gid` para outra planilha/aba.         |
 | RF05   | Envio de e-mail             | `send_meetup_email`: envia o texto (campo `message`) para todos os e-mails da planilha; requer `.env` com SMTP. |
+| RF06   | Rastreio de cliques         | Servidor HTTP (Express) na porta `TRACK_PORT` (padrão 3000); `get_clicks` retorna quantas pessoas acessaram o link do e-mail. |
 
 ---
 
@@ -41,7 +42,7 @@ Meetup-mcp-demo/
 
 - **Runtime:** Node.js 18+
 - **Protocolo:** Model Context Protocol (SDK `@modelcontextprotocol/sdk`)
-- **HTTP:** node-fetch
+- **HTTP:** node-fetch; **Express** (servidor de rastreio de cliques)
 - **CSV:** csv-parse (leitura do export do Google Sheets)
 - **E-mail:** nodemailer (SMTP)
 - **Ambiente:** dotenv (variáveis EMAIL_USER, EMAIL_PASS, SMTP_*)
@@ -87,6 +88,27 @@ A planilha deve ter uma coluna de e-mail (ex.: **"Endereço de e-mail"**). Os en
 
 ---
 
+## 🔗 Rastreio de cliques no link do e-mail (get_clicks)
+
+O servidor MCP sobe um **servidor HTTP** (Express) na porta 3000 (ou `TRACK_PORT` no `.env`) para rastrear cliques em links enviados por e-mail. Assim você pode colocar um link no e-mail e saber quantas pessoas acessaram.
+
+1. **Porta:** por padrão a porta é **3000**. Para mudar, defina `TRACK_PORT` no `.env` (ex.: `TRACK_PORT=3000`).
+2. **Expor na internet:** em outro terminal, execute:
+   ```bash
+   ngrok http 3000
+   ```
+   O ngrok exibirá uma URL pública (ex.: `https://abcd1234.ngrok.io`).
+3. **Link no e-mail:** use no corpo do e-mail um link no formato:
+   ```text
+   https://SEU_SUBDOMINIO.ngrok.io/click/EMAIL_DO_DESTINATARIO
+   ```
+   Substitua `SEU_SUBDOMINIO` pelo subdomínio que o ngrok mostrou e `EMAIL_DO_DESTINATARIO` pelo e-mail do destinatário (ou outro identificador único). Quando a pessoa clicar, o acesso será registrado.
+4. **Ver quantos acessaram:** no Cursor, use a ferramenta **get_clicks**. Ela retorna o total de cliques e a lista (quem clicou e em que data/hora).
+
+O servidor HTTP só fica ativo enquanto o processo MCP estiver rodando (Cursor com o projeto e o servidor meetup-forms ativos). Para testes locais e demos com ngrok isso é suficiente.
+
+---
+
 ## ⚠️ Pré-requisitos
 
 - **Node.js** 18 ou superior ([nodejs.org](https://nodejs.org))
@@ -103,7 +125,7 @@ O repositório **não inclui** a pasta `node_modules` (está no `.gitignore`). N
 npm install
 ```
 
-Isso instala: `@modelcontextprotocol/sdk`, `node-fetch`, `csv-parse`, `zod`, `nodemailer` e `dotenv`.
+Isso instala: `@modelcontextprotocol/sdk`, `node-fetch`, `csv-parse`, `zod`, `nodemailer`, `dotenv` e `express`.
 
 ---
 

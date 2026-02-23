@@ -1,5 +1,6 @@
 import path from "path";
 import { fileURLToPath } from "url";
+import fs from "fs/promises";
 import dotenv from "dotenv";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -10,7 +11,73 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import fetch from "node-fetch";
 import { parse } from "csv-parse/sync";
 import { z } from "zod";
+import express from "express";
 import { sendEmail } from "./email.js";
+
+// Arquivo para persistir cliques (mesmo processo do terminal e processo MCP do Cursor veem os mesmos dados)
+// Usar cwd para o arquivo ficar na pasta de onde o servidor foi iniciado
+const CLICKS_FILE = path.resolve(process.cwd(), "clicks.json");
+
+async function readClicksFromFile() {
+  try {
+    const data = await fs.readFile(CLICKS_FILE, "utf-8");
+    const parsed = JSON.parse(data);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    if (e?.code !== "ENOENT") console.error("[clicks] Erro ao ler arquivo:", e?.message || e);
+    return [];
+  }
+}
+
+async function appendClickToFile(click) {
+  const list = await readClicksFromFile();
+  list.push(click);
+  await fs.writeFile(CLICKS_FILE, JSON.stringify(list, null, 2), "utf-8");
+}
+
+// Estado em memória (usado pelas rotas HTTP; get_clicks lê do arquivo para ver cliques de qualquer processo)
+const clicks = [];
+
+// Servidor HTTP para rastrear cliques (link no email → GET /click/:user)
+const TRACK_PORT = Number(process.env.TRACK_PORT) || 3000;
+const app = express();
+app.use(express.json());
+
+// Rota raiz: link simples no email (só o domínio ngrok) também registra clique
+app.get("/", async (req, res) => {
+  const user = "visitante";
+  const click = { user, time: new Date().toISOString() };
+  clicks.push(click);
+  try {
+    await appendClickToFile(click);
+    console.log(`${user} clicou no link! (salvo em ${CLICKS_FILE})`);
+  } catch (err) {
+    console.error("[clicks] Erro ao salvar clique:", err?.message || err);
+  }
+  res.send("Obrigado por clicar!");
+});
+
+app.get("/click/:user", async (req, res) => {
+  const user = decodeURIComponent(req.params.user || "");
+  const click = { user, time: new Date().toISOString() };
+  clicks.push(click);
+  try {
+    await appendClickToFile(click);
+    console.log(`${user} clicou no link! (salvo em ${CLICKS_FILE})`);
+  } catch (err) {
+    console.error("[clicks] Erro ao salvar clique:", err?.message || err);
+  }
+  res.send("Obrigado por clicar!");
+});
+
+app.get("/clicks", async (req, res) => {
+  const list = await readClicksFromFile();
+  res.json(list);
+});
+
+app.listen(TRACK_PORT, () => {
+  console.log(`Servidor HTTP (rastreio de cliques): http://localhost:${TRACK_PORT}`);
+});
 
 // ID da planilha de respostas do Google Sheets (vinculada ao Forms do Meetup)
 // URL: https://docs.google.com/spreadsheets/d/1P3LoDlfpV4G4SCzNAaTjMMn82pXwFz9zY7dQCgi6-eo/edit
@@ -239,6 +306,29 @@ server.registerTool(
         isError: true,
       };
     }
+  }
+);
+
+server.registerTool(
+  "get_clicks",
+  {
+    description:
+      "Retorna todos os cliques que chegaram pelo link do email (rastreamento). Use após colocar o link do ngrok no email para saber quantas pessoas acessaram.",
+    inputSchema: {},
+  },
+  async () => {
+    const clicksList = await readClicksFromFile();
+    const total = clicksList.length;
+    let text = `Total de cliques: ${total}`;
+    if (clicksList.length > 0) {
+      text += "\n\n";
+      text += clicksList
+        .map((c, i) => `${i + 1}. ${c.user} - ${c.time}`)
+        .join("\n");
+    }
+    return {
+      content: [{ type: "text", text }],
+    };
   }
 );
 
